@@ -2,7 +2,22 @@ import React, { useState } from 'react';
 import { Globe, MapPin, GraduationCap, Home, Calendar, Plane } from 'lucide-react';
 import { getPredictedCost, type CostPredictionParams } from './lib/costPrediction';
 
-const CONTINENTS = {
+type Continent = {
+  name: string;
+  countries: {
+    [key: string]: {
+      name: string;
+      cities: {
+        [key: string]: {
+          name: string;
+          universities: string[];
+        };
+      };
+    };
+  };
+};
+
+const CONTINENTS: { [key: string]: Continent } = {
   'europe': {
     name: 'Europe',
     countries: {
@@ -340,7 +355,7 @@ function App() {
   const getUniversityImage = () => {
     const cityName = CONTINENTS[selectedContinent].countries[selectedCountry].cities[selectedCity].name;
     const universityName = selectedUniversity.split(' ')[0];
-    return `https://source.unsplash.com/1600x900/?university,${cityName},${universityName}`;
+    return `https://www.googleapis.com/customsearch/v1?key=${import.meta.env.VITE_GOOGLE_API_KEY}&cx=${import.meta.env.VITE_SEARCH_ENGINE_ID}&q=front+view+${universityName}+university+${cityName}&searchType=image`;
   };
 
   return (
