@@ -335,7 +335,11 @@ function App() {
     setSelectedUniversity(CONTINENTS[selectedContinent].countries[selectedCountry].cities[city].universities[0]);
   };
 
-const fetchUniversityImage = async (university: string, city: string, country: string) => {
+const fetchUniversityImage = async (
+  university: string,
+  city: string,
+  country: string
+) => {
   setImageLoading(true);
   setImageError(null);
 
@@ -344,64 +348,76 @@ const fetchUniversityImage = async (university: string, city: string, country: s
   const searchEngineId = import.meta.env.VITE_SEARCH_ENGINE_ID;
 
   if (!apiKey || !searchEngineId) {
-    setImageError('API configuration is missing');
+    setImageError("API configuration is missing");
     setImageLoading(false);
     return;
   }
 
   try {
-    // Construct search query
-    const searchQuery = `${university} ${city} ${country} university campus building`;
+    // Construct encoded search query
+    const searchQuery = encodeURIComponent(
+      `${university} ${city} ${country} university campus main building exterior`
+    );
 
     // Build URL with search parameters
-    const url = new URL('https://www.googleapis.com/customsearch/v1');
+    const url = new URL("https://www.googleapis.com/customsearch/v1");
     const params = {
       key: apiKey,
       cx: searchEngineId,
       q: searchQuery,
-      searchType: 'image',
-      num: '1',
-      imgSize: 'large',
-      imgType: 'photo',
-      safe: 'active'
+      searchType: "image",
+      num: "1",
+      imgSize: "large",
+      imgType: "photo",
+      safe: "active",
+      rights: "cc_publicdomain",
     };
 
-    // Add parameters to URL
     Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.append(key, value);
+      url.searchParams.append(key, value.toString());
     });
 
-    // Fetch image
+    // Fetch image data
     const response = await fetch(url.toString());
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
     const data = await response.json();
 
-    // Check if we have results
-    if (data.items && data.items.length > 0) {
-      const imageUrl = data.items[0].link;
-
-      // Validate image URL
-      const imgResponse = await fetch(imageUrl, { method: 'HEAD' });
-      if (imgResponse.ok) {
-        setUniversityImage(imageUrl);
-      } else {
-        throw new Error('Image URL is not accessible');
-      }
-    } else {
-      throw new Error('No images found');
+    // Handle Google API errors
+    if (data.error) {
+      throw new Error(`Google API Error: ${data.error.message}`);
     }
+
+    // Check for valid results
+    if (!data.items?.length) {
+      throw new Error("No images found for this university");
+    }
+
+    const imageUrl = data.items[0].link;
+
+    // Verify image URL
+    const imgCheck = await fetch(imageUrl, { method: "HEAD" });
+    if (!imgCheck.ok) {
+      throw new Error("Image source not available");
+    }
+
+    // Validate content type
+    const contentType = imgCheck.headers.get("Content-Type");
+    if (!contentType?.startsWith("image/")) {
+      throw new Error("URL does not point to a valid image");
+    }
+
+    // Set valid image
+    setUniversityImage(imageUrl);
   } catch (error) {
-    console.error('Error fetching university image:', error);
-    setImageError(error instanceof Error ? error.message : 'Failed to load image');
-    setUniversityImage('/placeholder-university.jpg');
+    console.error("Image fetch error:", error);
+    setImageError(
+      error instanceof Error ? error.message : "Failed to load image"
+    );
+    setUniversityImage("/placeholder-university.jpg");
   } finally {
     setImageLoading(false);
   }
 };
+
 
   const handleUniversityChange = (university: string) => {
     setSelectedUniversity(university);
