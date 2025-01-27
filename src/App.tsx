@@ -360,33 +360,52 @@ function App() {
   const getUniversityImage = async (university: string) => {
     setImageLoading(true);
     try {
-      const cityName = CONTINENTS[selectedContinent].countries[selectedCountry].cities[selectedCity].name;
-      const response = await fetch(
-        `https://www.googleapis.com/customsearch/v1?` +
-        `key=${import.meta.env.VITE_GOOGLE_API_KEY}&` +
-        `cx=${import.meta.env.VITE_SEARCH_ENGINE_ID}&` +
-        `q=${encodeURIComponent(`${university} ${cityName} university campus main building`)}&` +
-        `searchType=image&num=1&imgSize=large`
-      );
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch image');
+      // Guard against missing selections
+      if (!selectedContinent || !selectedCountry || !selectedCity) {
+        throw new Error("City/country/continent not selected");
       }
 
+      const cityName =
+        CONTINENTS[selectedContinent].countries[selectedCountry].cities[
+          selectedCity
+        ].name;
+      const url = new URL("https://www.googleapis.com/customsearch/v1");
+
+      // API parameters
+      url.searchParams.append("key", import.meta.env.VITE_GOOGLE_API_KEY);
+      url.searchParams.append("cx", import.meta.env.VITE_SEARCH_ENGINE_ID);
+      url.searchParams.append(
+        "q",
+        encodeURIComponent(
+          `${university} ${cityName} university campus main building`
+        )
+      );
+      url.searchParams.append("searchType", "image");
+      url.searchParams.append("num", "1");
+      url.searchParams.append("imgSize", "large");
+      url.searchParams.append("imgType", "photo"); // Optional: filter for photos
+
+      const response = await fetch(url.toString());
       const data = await response.json();
-      if (data.items && data.items.length > 0) {
+
+      // Handle Google API errors (e.g., invalid key)
+      if (data.error) {
+        throw new Error(`Google API Error: ${data.error.message}`);
+      }
+
+      // Set image or fallback
+      if (data.items?.length > 0) {
         setUniversityImage(data.items[0].link);
       } else {
-        setUniversityImage('/placeholder-university.jpg');
+        setUniversityImage("/placeholder-university.jpg");
       }
     } catch (error) {
-      console.error('Error fetching university image:', error);
-      setUniversityImage('/placeholder-university.jpg');
+      console.error("Error fetching university image:", error);
+      setUniversityImage("/placeholder-university.jpg");
     } finally {
       setImageLoading(false);
     }
   };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
       <div className="container mx-auto px-4 py-8">
