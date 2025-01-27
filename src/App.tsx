@@ -341,7 +341,7 @@ function App() {
     
     // Validate environment variables
     const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
-    const searchEngineId = import.meta.env.VITE_GOOGLE_CSE_ID;
+  const searchEngineId = import.meta.env.VITE_SEARCH_ENGINE_ID;
     
     if (!apiKey || !searchEngineId) {
       setImageError('API configuration is missing');
