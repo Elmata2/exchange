@@ -335,73 +335,73 @@ function App() {
     setSelectedUniversity(CONTINENTS[selectedContinent].countries[selectedCountry].cities[city].universities[0]);
   };
 
-  const fetchUniversityImage = async (university: string, city: string, country: string) => {
-    setImageLoading(true);
-    setImageError(null);
-    
-    // Validate environment variables
-    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+const fetchUniversityImage = async (university: string, city: string, country: string) => {
+  setImageLoading(true);
+  setImageError(null);
+
+  // Validate environment variables
+  const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
   const searchEngineId = import.meta.env.VITE_SEARCH_ENGINE_ID;
-    
-    if (!apiKey || !searchEngineId) {
-      setImageError('API configuration is missing');
-      setImageLoading(false);
-      return;
+
+  if (!apiKey || !searchEngineId) {
+    setImageError('API configuration is missing');
+    setImageLoading(false);
+    return;
+  }
+
+  try {
+    // Construct search query
+    const searchQuery = `${university} ${city} ${country} university campus building`;
+
+    // Build URL with search parameters
+    const url = new URL('https://www.googleapis.com/customsearch/v1');
+    const params = {
+      key: apiKey,
+      cx: searchEngineId,
+      q: searchQuery,
+      searchType: 'image',
+      num: '1',
+      imgSize: 'large',
+      imgType: 'photo',
+      safe: 'active'
+    };
+
+    // Add parameters to URL
+    Object.entries(params).forEach(([key, value]) => {
+      url.searchParams.append(key, value);
+    });
+
+    // Fetch image
+    const response = await fetch(url.toString());
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    try {
-      // Construct search query
-      const searchQuery = `${university} ${city} ${country} university campus building`;
-      
-      // Build URL with search parameters
-      const url = new URL('https://www.googleapis.com/customsearch/v1');
-      const params = {
-        key: apiKey,
-        cx: searchEngineId,
-        q: searchQuery,
-        searchType: 'image',
-        num: '1',
-        imgSize: 'large',
-        imgType: 'photo',
-        safe: 'active'
-      };
+    const data = await response.json();
 
-      // Add parameters to URL
-      Object.entries(params).forEach(([key, value]) => {
-        url.searchParams.append(key, value);
-      });
+    // Check if we have results
+    if (data.items && data.items.length > 0) {
+      const imageUrl = data.items[0].link;
 
-      // Fetch image
-      const response = await fetch(url.toString());
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      // Check if we have results
-      if (data.items && data.items.length > 0) {
-        const imageUrl = data.items[0].link;
-        
-        // Validate image URL
-        const imgResponse = await fetch(imageUrl, { method: 'HEAD' });
-        if (imgResponse.ok) {
-          setUniversityImage(imageUrl);
-        } else {
-          throw new Error('Image URL is not accessible');
-        }
+      // Validate image URL
+      const imgResponse = await fetch(imageUrl, { method: 'HEAD' });
+      if (imgResponse.ok) {
+        setUniversityImage(imageUrl);
       } else {
-        throw new Error('No images found');
+        throw new Error('Image URL is not accessible');
       }
-    } catch (error) {
-      console.error('Error fetching university image:', error);
-      setImageError(error instanceof Error ? error.message : 'Failed to load image');
-      setUniversityImage('/placeholder-university.jpg');
-    } finally {
-      setImageLoading(false);
+    } else {
+      throw new Error('No images found');
     }
-  };
+  } catch (error) {
+    console.error('Error fetching university image:', error);
+    setImageError(error instanceof Error ? error.message : 'Failed to load image');
+    setUniversityImage('/placeholder-university.jpg');
+  } finally {
+    setImageLoading(false);
+  }
+};
 
   const handleUniversityChange = (university: string) => {
     setSelectedUniversity(university);
