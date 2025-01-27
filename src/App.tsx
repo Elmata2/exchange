@@ -311,6 +311,7 @@ function App() {
   });
   const [predictedCost, setPredictedCost] = useState<number | null>(null);
   const [universityImage, setUniversityImage] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
 
   const handleContinentChange = (continent: string) => {
@@ -334,9 +335,81 @@ function App() {
     setSelectedUniversity(CONTINENTS[selectedContinent].countries[selectedCountry].cities[city].universities[0]);
   };
 
+  const fetchUniversityImage = async (university: string, city: string, country: string) => {
+    setImageLoading(true);
+    setImageError(null);
+    
+    // Validate environment variables
+    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+    const searchEngineId = import.meta.env.VITE_GOOGLE_CSE_ID;
+    
+    if (!apiKey || !searchEngineId) {
+      setImageError('API configuration is missing');
+      setImageLoading(false);
+      return;
+    }
+
+    try {
+      // Construct search query
+      const searchQuery = `${university} ${city} ${country} university campus building`;
+      
+      // Build URL with search parameters
+      const url = new URL('https://www.googleapis.com/customsearch/v1');
+      const params = {
+        key: apiKey,
+        cx: searchEngineId,
+        q: searchQuery,
+        searchType: 'image',
+        num: '1',
+        imgSize: 'large',
+        imgType: 'photo',
+        safe: 'active'
+      };
+
+      // Add parameters to URL
+      Object.entries(params).forEach(([key, value]) => {
+        url.searchParams.append(key, value);
+      });
+
+      // Fetch image
+      const response = await fetch(url.toString());
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Check if we have results
+      if (data.items && data.items.length > 0) {
+        const imageUrl = data.items[0].link;
+        
+        // Validate image URL
+        const imgResponse = await fetch(imageUrl, { method: 'HEAD' });
+        if (imgResponse.ok) {
+          setUniversityImage(imageUrl);
+        } else {
+          throw new Error('Image URL is not accessible');
+        }
+      } else {
+        throw new Error('No images found');
+      }
+    } catch (error) {
+      console.error('Error fetching university image:', error);
+      setImageError(error instanceof Error ? error.message : 'Failed to load image');
+      setUniversityImage('/placeholder-university.jpg');
+    } finally {
+      setImageLoading(false);
+    }
+  };
+
   const handleUniversityChange = (university: string) => {
     setSelectedUniversity(university);
-    getUniversityImage(university); // Fetch image when university changes
+    
+    const cityName = CONTINENTS[selectedContinent].countries[selectedCountry].cities[selectedCity].name;
+    const countryName = CONTINENTS[selectedContinent].countries[selectedCountry].name;
+    
+    fetchUniversityImage(university, cityName, countryName);
   };
 
   const calculateBudget = () => {
@@ -357,55 +430,6 @@ function App() {
     setPredictedCost(cost);
   };
 
-  const getUniversityImage = async (university: string) => {
-    setImageLoading(true);
-    try {
-      // Guard against missing selections
-      if (!selectedContinent || !selectedCountry || !selectedCity) {
-        throw new Error("City/country/continent not selected");
-      }
-
-      const cityName =
-        CONTINENTS[selectedContinent].countries[selectedCountry].cities[
-          selectedCity
-        ].name;
-      const url = new URL("https://www.googleapis.com/customsearch/v1");
-
-      // API parameters
-      url.searchParams.append("key", import.meta.env.VITE_GOOGLE_API_KEY);
-      url.searchParams.append("cx", import.meta.env.VITE_SEARCH_ENGINE_ID);
-      url.searchParams.append(
-        "q",
-        encodeURIComponent(
-          `${university} ${cityName} university campus main building`
-        )
-      );
-      url.searchParams.append("searchType", "image");
-      url.searchParams.append("num", "1");
-      url.searchParams.append("imgSize", "large");
-      url.searchParams.append("imgType", "photo"); // Optional: filter for photos
-
-      const response = await fetch(url.toString());
-      const data = await response.json();
-
-      // Handle Google API errors (e.g., invalid key)
-      if (data.error) {
-        throw new Error(`Google API Error: ${data.error.message}`);
-      }
-
-      // Set image or fallback
-      if (data.items?.length > 0) {
-        setUniversityImage(data.items[0].link);
-      } else {
-        setUniversityImage("/placeholder-university.jpg");
-      }
-    } catch (error) {
-      console.error("Error fetching university image:", error);
-      setUniversityImage("/placeholder-university.jpg");
-    } finally {
-      setImageLoading(false);
-    }
-  };
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
       <div className="container mx-auto px-4 py-8">
@@ -498,21 +522,30 @@ function App() {
                   </select>
                 </div>
 
-                <div className="mt-4 relative">
-                  {imageLoading && (
+                <div className="mt-4 relative h-48">
+                  {imageLoading ? (
                     <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                      <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent"></div>
                     </div>
+                  ) : (
+                    <>
+                      <img
+                        src={universityImage || '/placeholder-university.jpg'}
+                        alt={`${selectedUniversity} campus`}
+                        className="w-full h-48 object-cover rounded-lg shadow-md transition-opacity duration-300"
+                        onError={(e) => {
+                          const img = e.target as HTMLImageElement;
+                          img.src = '/placeholder-university.jpg';
+                          setImageError('Failed to load university image');
+                        }}
+                      />
+                      {imageError && (
+                        <div className="absolute bottom-0 left-0 right-0 bg-red-500 bg-opacity-80 text-white text-sm p-2 rounded-b-lg">
+                          {imageError}
+                        </div>
+                      )}
+                    </>
                   )}
-                  <img
-                    src={universityImage || '/placeholder-university.jpg'}
-                    alt={`${selectedUniversity} campus`}
-                    className="w-full h-48 object-cover rounded-lg shadow-md"
-                    onError={(e) => {
-                      const img = e.target as HTMLImageElement;
-                      img.src = '/placeholder-university.jpg';
-                    }}
-                  />
                 </div>
 
                 <NumberInput
