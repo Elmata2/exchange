@@ -296,9 +296,7 @@ function App() {
   const [selectedContinent, setSelectedContinent] = useState('europe');
   const [selectedCountry, setSelectedCountry] = useState('france');
   const [selectedCity, setSelectedCity] = useState('paris');
-  const [selectedUniversity, setSelectedUniversity] = useState(
-    CONTINENTS[selectedContinent].countries[selectedCountry].cities[selectedCity].universities[0]
-  );
+  const [selectedUniversity, setSelectedUniversity] = useState(CONTINENTS[selectedContinent].countries[selectedCountry].cities[selectedCity].universities[0]);
   const [duration, setDuration] = useState<number>(6);
   const [preferences, setPreferences] = useState<PreferenceScales>({
     accommodation: 3,
@@ -312,6 +310,7 @@ function App() {
     internationalTrips: 1
   });
   const [predictedCost, setPredictedCost] = useState<number | null>(null);
+  const [universityImage, setUniversityImage] = useState<string | null>(null);
 
   const handleContinentChange = (continent: string) => {
     setSelectedContinent(continent);
@@ -334,6 +333,11 @@ function App() {
     setSelectedUniversity(CONTINENTS[selectedContinent].countries[selectedCountry].cities[city].universities[0]);
   };
 
+  const handleUniversityChange = (university: string) => {
+    setSelectedUniversity(university);
+    getUniversityImage(university); // Fetch image when university changes
+  };
+
   const calculateBudget = () => {
     const params: CostPredictionParams = {
       cityId: selectedCity,
@@ -352,10 +356,28 @@ function App() {
     setPredictedCost(cost);
   };
 
-  const getUniversityImage = () => {
-    const cityName = CONTINENTS[selectedContinent].countries[selectedCountry].cities[selectedCity].name;
-    const universityName = selectedUniversity.split(' ')[0];
-    return `https://www.googleapis.com/customsearch/v1?key=${import.meta.env.VITE_GOOGLE_API_KEY}&cx=${import.meta.env.VITE_SEARCH_ENGINE_ID}&q=front+view+${universityName}+university+${cityName}&searchType=image`;
+  const getUniversityImage = async (university: string) => {
+    try {
+      const cityName = CONTINENTS[selectedContinent].countries[selectedCountry].cities[selectedCity].name;
+      // Get full university name instead of just first word
+      const response = await fetch(
+        `https://www.googleapis.com/customsearch/v1?` +
+        `key=${import.meta.env.VITE_GOOGLE_API_KEY}&` +
+        `cx=${import.meta.env.VITE_SEARCH_ENGINE_ID}&` +
+        `q=${encodeURIComponent(`${university} ${cityName} campus building`)}&` +
+        `searchType=image&num=1`
+      );
+      
+      const data = await response.json();
+      if (data.items && data.items.length > 0) {
+        setUniversityImage(data.items[0].link);
+      } else {
+        setUniversityImage(null);
+      }
+    } catch (error) {
+      console.error('Error fetching university image:', error);
+      setUniversityImage(null);
+    }
   };
 
   return (
@@ -439,7 +461,7 @@ function App() {
                   </label>
                   <select
                     value={selectedUniversity}
-                    onChange={(e) => setSelectedUniversity(e.target.value)}
+                    onChange={(e) => handleUniversityChange(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
                   >
                     {CONTINENTS[selectedContinent].countries[selectedCountry].cities[selectedCity].universities.map((uni) => (
@@ -452,7 +474,7 @@ function App() {
 
                 <div className="mt-4">
                   <img
-                    src={getUniversityImage()}
+                    src={universityImage || '/placeholder-university.jpg'}
                     alt={`${selectedUniversity}`}
                     className="w-full h-48 object-cover rounded-lg shadow-md"
                   />
