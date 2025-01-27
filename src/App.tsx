@@ -311,6 +311,7 @@ function App() {
   });
   const [predictedCost, setPredictedCost] = useState<number | null>(null);
   const [universityImage, setUniversityImage] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
 
   const handleContinentChange = (continent: string) => {
     setSelectedContinent(continent);
@@ -357,26 +358,32 @@ function App() {
   };
 
   const getUniversityImage = async (university: string) => {
+    setImageLoading(true);
     try {
       const cityName = CONTINENTS[selectedContinent].countries[selectedCountry].cities[selectedCity].name;
-      // Get full university name instead of just first word
       const response = await fetch(
         `https://www.googleapis.com/customsearch/v1?` +
         `key=${import.meta.env.VITE_GOOGLE_API_KEY}&` +
         `cx=${import.meta.env.VITE_SEARCH_ENGINE_ID}&` +
-        `q=${encodeURIComponent(`${university} ${cityName} campus building`)}&` +
-        `searchType=image&num=1`
+        `q=${encodeURIComponent(`${university} ${cityName} university campus main building`)}&` +
+        `searchType=image&num=1&imgSize=large`
       );
       
+      if (!response.ok) {
+        throw new Error('Failed to fetch image');
+      }
+
       const data = await response.json();
       if (data.items && data.items.length > 0) {
         setUniversityImage(data.items[0].link);
       } else {
-        setUniversityImage(null);
+        setUniversityImage('/placeholder-university.jpg');
       }
     } catch (error) {
       console.error('Error fetching university image:', error);
-      setUniversityImage(null);
+      setUniversityImage('/placeholder-university.jpg');
+    } finally {
+      setImageLoading(false);
     }
   };
 
@@ -472,11 +479,20 @@ function App() {
                   </select>
                 </div>
 
-                <div className="mt-4">
+                <div className="mt-4 relative">
+                  {imageLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                    </div>
+                  )}
                   <img
                     src={universityImage || '/placeholder-university.jpg'}
-                    alt={`${selectedUniversity}`}
+                    alt={`${selectedUniversity} campus`}
                     className="w-full h-48 object-cover rounded-lg shadow-md"
+                    onError={(e) => {
+                      const img = e.target as HTMLImageElement;
+                      img.src = '/placeholder-university.jpg';
+                    }}
                   />
                 </div>
 
