@@ -343,81 +343,98 @@ const fetchUniversityImage = async (
   setImageLoading(true);
   setImageError(null);
 
-  // Validate environment variables
-  const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
-  const searchEngineId = import.meta.env.VITE_SEARCH_ENGINE_ID;
+  // 1. Validate environment variables
+  const apiKey = import.meta.env.VITE_GOOGLE_API_KEY?.trim();
+  const searchEngineId = import.meta.env.VITE_SEARCH_ENGINE_ID?.trim();
 
   if (!apiKey || !searchEngineId) {
-    setImageError("API configuration is missing");
+    const error = `API configuration error: ${
+      !apiKey ? "Missing API Key" : ""
+    } ${!searchEngineId ? "Missing Search Engine ID" : ""}`.trim();
+    setImageError(error);
     setImageLoading(false);
     return;
   }
 
   try {
-    // Construct encoded search query
-    const searchQuery = encodeURIComponent(
-      `${university} ${city} ${country} university campus main building exterior`
-    );
+    // 2. Create optimized search query
+    const searchTerms = [
+      university,
+      city,
+      country,
+      "university",
+      "campus",
+      "building",
+      "exterior",
+      "photo",
+    ]
+      .filter(Boolean)
+      .join(" ");
 
-    // Build URL with search parameters
+    // 3. Build API URL
     const url = new URL("https://www.googleapis.com/customsearch/v1");
-    const params = {
+    url.search = new URLSearchParams({
       key: apiKey,
       cx: searchEngineId,
-      q: searchQuery,
+      q: searchTerms,
       searchType: "image",
       num: "1",
       imgSize: "large",
       imgType: "photo",
       safe: "active",
       rights: "cc_publicdomain",
-    };
+      fields: "items.link",
+    }).toString();
 
-    Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.append(key, value.toString());
-    });
-
-    // Fetch image data
-    const response = await fetch(url.toString());
+    // 4. Make API request
+    const response = await fetch(url);
     const data = await response.json();
 
-    // Handle Google API errors
+    // 5. Handle API errors
     if (data.error) {
-      throw new Error(`Google API Error: ${data.error.message}`);
+      console.error("Google API Error Details:", data.error);
+      throw new Error(`API Error: ${data.error.message}`);
     }
 
-    // Check for valid results
+    // 6. Validate results
     if (!data.items?.length) {
-      throw new Error("No images found for this university");
+      throw new Error("No images found. Try different search terms");
     }
 
     const imageUrl = data.items[0].link;
 
-    // Verify image URL
-    const imgCheck = await fetch(imageUrl, { method: "HEAD" });
-    if (!imgCheck.ok) {
-      throw new Error("Image source not available");
+    // 7. Verify image URL (optional - can remove if causing issues)
+    try {
+      const imgCheck = await fetch(imageUrl, { method: "HEAD" });
+      if (!imgCheck.ok) {
+        throw new Error("Image source unavailable");
+      }
+    } catch (imgError) {
+      console.warn("Image verification failed:", imgError);
+      // We'll still use the URL as fallback
     }
 
-    // Validate content type
-    const contentType = imgCheck.headers.get("Content-Type");
-    if (!contentType?.startsWith("image/")) {
-      throw new Error("URL does not point to a valid image");
-    }
-
-    // Set valid image
     setUniversityImage(imageUrl);
   } catch (error) {
-    console.error("Image fetch error:", error);
-    setImageError(
-      error instanceof Error ? error.message : "Failed to load image"
-    );
+    console.error("Full error stack:", error);
+    setImageError(getUserFriendlyError(error));
     setUniversityImage("/placeholder-university.jpg");
   } finally {
     setImageLoading(false);
   }
 };
 
+// Helper function for error messages
+const getUserFriendlyError = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message.includes("quota")
+      ? "API limit exceeded. Try again tomorrow"
+      : error.message.includes("invalid")
+      ? "Invalid API configuration"
+      : error.message;
+  }
+  return "Failed to load image. Please try again.";
+};
 
   const handleUniversityChange = (university: string) => {
     setSelectedUniversity(university);
