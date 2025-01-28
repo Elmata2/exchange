@@ -372,7 +372,7 @@ const fetchUniversityImage = async (
       .join(" ");
 
     // 3. Build API URL
-    const url = new URL("https://www.googleapis.com/customsearch/v1");
+    const url = new URL("https://cse.google.com/cse?cx=63fc55e5344e642e0");
     url.search = new URLSearchParams({
       key: apiKey,
       cx: searchEngineId,
