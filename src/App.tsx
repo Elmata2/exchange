@@ -335,113 +335,76 @@ function App() {
     setSelectedUniversity(CONTINENTS[selectedContinent].countries[selectedCountry].cities[city].universities[0]);
   };
 
-const fetchUniversityImage = async (
-  university: string,
-  city: string,
-  country: string
-) => {
-  setImageLoading(true);
-  setImageError(null);
+  const fetchUniversityImage = async (university: string, city: string, country: string) => {
+    setImageLoading(true);
+    setImageError(null);
 
-  // 1. Validate environment variables
-  const apiKey = import.meta.env.VITE_GOOGLE_API_KEY?.trim();
-  const searchEngineId = import.meta.env.VITE_SEARCH_ENGINE_ID?.trim();
+    // 1. Validate environment variables
+    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY?.trim();
+    const searchEngineId = import.meta.env.VITE_SEARCH_ENGINE_ID?.trim();
 
-  if (!apiKey || !searchEngineId) {
-    const error = `API configuration error: ${
-      !apiKey ? "Missing API Key" : ""
-    } ${!searchEngineId ? "Missing Search Engine ID" : ""}`.trim();
-    setImageError(error);
-    setImageLoading(false);
-    return;
-  }
-
-  try {
-    // 2. Create optimized search query
-    const searchTerms = [
-      university,
-      city,
-      country,
-      "university",
-      "campus",
-      "building",
-      "exterior",
-      "photo",
-    ]
-      .filter(Boolean)
-      .join(" ");
-
-    // 3. Build API URL
-    const url = new URL("https://cse.google.com/cse?cx=63fc55e5344e642e0");
-    url.search = new URLSearchParams({
-      key: apiKey,
-      cx: searchEngineId,
-      q: searchTerms,
-      searchType: "image",
-      num: "1",
-      imgSize: "large",
-      imgType: "photo",
-      safe: "active",
-      rights: "cc_publicdomain",
-      fields: "items.link",
-    }).toString();
-
-    // 4. Make API request
-    const response = await fetch(url);
-    const data = await response.json();
-
-    // 5. Handle API errors
-    if (data.error) {
-      console.error("Google API Error Details:", data.error);
-      throw new Error(`API Error: ${data.error.message}`);
+    if (!apiKey || !searchEngineId) {
+      setImageError('Missing API configuration');
+      setImageLoading(false);
+      return;
     }
 
-    // 6. Validate results
-    if (!data.items?.length) {
-      throw new Error("No images found. Try different search terms");
-    }
-
-    const imageUrl = data.items[0].link;
-
-    // 7. Verify image URL (optional - can remove if causing issues)
     try {
-      const imgCheck = await fetch(imageUrl, { method: "HEAD" });
-      if (!imgCheck.ok) {
-        throw new Error("Image source unavailable");
+      // 2. Build the search URL with proper parameters
+      const baseUrl = 'https://www.googleapis.com/customsearch/v1';
+      const searchQuery = encodeURIComponent(`${university} ${city} ${country} university campus`);
+      
+      const params = new URLSearchParams({
+        key: apiKey,
+        cx: searchEngineId,
+        q: searchQuery,
+        searchType: 'image',
+        imgSize: 'xlarge', // Prefer larger images
+        imgType: 'photo',  // Only get actual photos
+        num: '1',          // We only need one result
+        safe: 'active',    // Safe search
+        // Filter to prefer higher quality images
+        imgDominantColor: 'white', // Most university buildings are light colored
+        alt: 'json'
+      });
+
+      const response = await fetch(`${baseUrl}?${params}`);
+      
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status}`);
       }
-    } catch (imgError) {
-      console.warn("Image verification failed:", imgError);
-      // We'll still use the URL as fallback
+
+      const data = await response.json();
+
+      if (!data.items?.[0]?.link) {
+        throw new Error('No image found');
+      }
+
+      // 3. Get the best quality image
+      const imageUrl = data.items[0].link;
+
+      // 4. Verify the image exists and is accessible
+      const imageResponse = await fetch(imageUrl, { method: 'HEAD' });
+      if (!imageResponse.ok) {
+        throw new Error('Selected image is not accessible');
+      }
+
+      setUniversityImage(imageUrl);
+      setImageError(null);
+
+    } catch (error) {
+      console.error('Image fetch error:', error);
+      setImageError(error instanceof Error ? error.message : 'Failed to load image');
+      setUniversityImage('/placeholder-university.jpg');
+    } finally {
+      setImageLoading(false);
     }
-
-    setUniversityImage(imageUrl);
-  } catch (error) {
-    console.error("Full error stack:", error);
-    setImageError(getUserFriendlyError(error));
-    setUniversityImage("placeholder-university.jpg");
-  } finally {
-    setImageLoading(false);
-  }
-};
-
-// Helper function for error messages
-const getUserFriendlyError = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message.includes("quota")
-      ? "API limit exceeded. Try again tomorrow"
-      : error.message.includes("invalid")
-      ? "Invalid API configuration"
-      : error.message;
-  }
-  return "Failed to load image. Please try again.";
-};
+  };
 
   const handleUniversityChange = (university: string) => {
     setSelectedUniversity(university);
-    
     const cityName = CONTINENTS[selectedContinent].countries[selectedCountry].cities[selectedCity].name;
     const countryName = CONTINENTS[selectedContinent].countries[selectedCountry].name;
-    
     fetchUniversityImage(university, cityName, countryName);
   };
 
@@ -561,23 +524,22 @@ const getUserFriendlyError = (error: unknown): string => {
                       <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent"></div>
                     </div>
                   ) : (
-                    <>
+                    <div className="relative w-full h-full">
                       <img
                         src={universityImage || '/placeholder-university.jpg'}
                         alt={`${selectedUniversity} campus`}
-                        className="w-full h-48 object-cover rounded-lg shadow-md transition-opacity duration-300"
+                        className="w-full h-full object-cover rounded-lg shadow-md"
                         onError={(e) => {
                           const img = e.target as HTMLImageElement;
                           img.src = '/placeholder-university.jpg';
-                          setImageError('Failed to load university image');
                         }}
                       />
                       {imageError && (
-                        <div className="absolute bottom-0 left-0 right-0 bg-red-500 bg-opacity-80 text-white text-sm p-2 rounded-b-lg">
+                        <div className="absolute bottom-0 left-0 right-0 bg-red-500 bg-opacity-75 text-white p-2 text-sm rounded-b-lg">
                           {imageError}
                         </div>
                       )}
-                    </>
+                    </div>
                   )}
                 </div>
 
