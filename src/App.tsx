@@ -418,7 +418,7 @@ const fetchUniversityImage = async (
   } catch (error) {
     console.error("Full error stack:", error);
     setImageError(getUserFriendlyError(error));
-    setUniversityImage("/placeholder-university.jpg");
+    setUniversityImage("placeholder-university.jpg");
   } finally {
     setImageLoading(false);
   }
