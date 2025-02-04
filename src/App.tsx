@@ -1,23 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Globe, MapPin, GraduationCap, Home, Calendar, Plane } from 'lucide-react';
 import { getPredictedCost, type CostPredictionParams } from './lib/costPrediction';
+import { searchUniversityImage } from './lib/imageSearch';
 
-type Continent = {
-  name: string;
-  countries: {
-    [key: string]: {
-      name: string;
-      cities: {
-        [key: string]: {
-          name: string;
-          universities: string[];
-        };
-      };
-    };
-  };
-};
-
-const CONTINENTS: { [key: string]: Continent } = {
+const CONTINENTS = {
   'europe': {
     name: 'Europe',
     countries: {
@@ -296,7 +282,9 @@ function App() {
   const [selectedContinent, setSelectedContinent] = useState('europe');
   const [selectedCountry, setSelectedCountry] = useState('france');
   const [selectedCity, setSelectedCity] = useState('paris');
-  const [selectedUniversity, setSelectedUniversity] = useState(CONTINENTS[selectedContinent].countries[selectedCountry].cities[selectedCity].universities[0]);
+  const [selectedUniversity, setSelectedUniversity] = useState(
+    CONTINENTS[selectedContinent].countries[selectedCountry].cities[selectedCity].universities[0]
+  );
   const [duration, setDuration] = useState<number>(6);
   const [preferences, setPreferences] = useState<PreferenceScales>({
     accommodation: 3,
@@ -311,8 +299,7 @@ function App() {
   });
   const [predictedCost, setPredictedCost] = useState<number | null>(null);
   const [universityImage, setUniversityImage] = useState<string | null>(null);
-  const [imageError, setImageError] = useState<string | null>(null);
-  const [imageLoading, setImageLoading] = useState(false);
+  const [isLoadingImage, setIsLoadingImage] = useState(false);
 
   const handleContinentChange = (continent: string) => {
     setSelectedContinent(continent);
@@ -335,79 +322,6 @@ function App() {
     setSelectedUniversity(CONTINENTS[selectedContinent].countries[selectedCountry].cities[city].universities[0]);
   };
 
-  const fetchUniversityImage = async (university: string, city: string, country: string) => {
-    setImageLoading(true);
-    setImageError(null);
-
-    // 1. Validate environment variables
-    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY?.trim();
-    const searchEngineId = import.meta.env.VITE_SEARCH_ENGINE_ID?.trim();
-
-    if (!apiKey || !searchEngineId) {
-      setImageError('Missing API configuration');
-      setImageLoading(false);
-      return;
-    }
-
-    try {
-      // 2. Build the search URL with proper parameters
-      const baseUrl = 'https://www.googleapis.com/customsearch/v1';
-      const searchQuery = encodeURIComponent(`${university} ${city} ${country} university campus`);
-      
-      const params = new URLSearchParams({
-        key: apiKey,
-        cx: searchEngineId,
-        q: searchQuery,
-        searchType: 'image',
-        imgSize: 'xlarge', // Prefer larger images
-        imgType: 'photo',  // Only get actual photos
-        num: '1',          // We only need one result
-        safe: 'active',    // Safe search
-        // Filter to prefer higher quality images
-        imgDominantColor: 'white', // Most university buildings are light colored
-        alt: 'json'
-      });
-
-      const response = await fetch(`${baseUrl}?${params}`);
-      
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (!data.items?.[0]?.link) {
-        throw new Error('No image found');
-      }
-
-      // 3. Get the best quality image
-      const imageUrl = data.items[0].link;
-
-      // 4. Verify the image exists and is accessible
-      const imageResponse = await fetch(imageUrl, { method: 'HEAD' });
-      if (!imageResponse.ok) {
-        throw new Error('Selected image is not accessible');
-      }
-
-      setUniversityImage(imageUrl);
-      setImageError(null);
-
-    } catch (error) {
-      console.error('Image fetch error:', error);
-      setImageError(error instanceof Error ? error.message : 'Failed to load image');
-      setUniversityImage('/placeholder-university.jpg');
-    } finally {
-      setImageLoading(false);
-    }
-  };
-
-  const handleUniversityChange = (university: string) => {
-    setSelectedUniversity(university);
-    const cityName = CONTINENTS[selectedContinent].countries[selectedCountry].cities[selectedCity].name;
-    const countryName = CONTINENTS[selectedContinent].countries[selectedCountry].name;
-    fetchUniversityImage(university, cityName, countryName);
-  };
-
   const calculateBudget = () => {
     const params: CostPredictionParams = {
       cityId: selectedCity,
@@ -426,6 +340,24 @@ function App() {
     setPredictedCost(cost);
   };
 
+  useEffect(() => {
+    const updateUniversityImage = async () => {
+      setIsLoadingImage(true);
+      try {
+        const cityName = CONTINENTS[selectedContinent].countries[selectedCountry].cities[selectedCity].name;
+        const image = await searchUniversityImage(selectedUniversity, cityName);
+        setUniversityImage(image);
+      } catch (error) {
+        console.error('Failed to update university image:', error);
+        setUniversityImage('https://images.unsplash.com/photo-1562774053-701939374585?w=1600&h=900&fit=crop&q=80');
+      } finally {
+        setIsLoadingImage(false);
+      }
+    };
+
+    updateUniversityImage();
+  }, [selectedUniversity, selectedCity, selectedCountry, selectedContinent]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
       <div className="container mx-auto px-4 py-8">
@@ -442,7 +374,6 @@ function App() {
 
         <div className="grid md:grid-cols-2 gap-8 max-w-6xl mx-auto">
           <div className="space-y-6">
-            {/* Destination Section */}
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2">
                 <MapPin className="w-6 h-6 text-indigo-600" />
@@ -507,7 +438,7 @@ function App() {
                   </label>
                   <select
                     value={selectedUniversity}
-                    onChange={(e) => handleUniversityChange(e.target.value)}
+                    onChange={(e) => setSelectedUniversity(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
                   >
                     {CONTINENTS[selectedContinent].countries[selectedCountry].cities[selectedCity].universities.map((uni) => (
@@ -518,27 +449,17 @@ function App() {
                   </select>
                 </div>
 
-                <div className="mt-4 relative h-48">
-                  {imageLoading ? (
-                    <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
-                      <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent"></div>
-                    </div>
-                  ) : (
-                    <div className="relative w-full h-full">
-                      <img
-                        src={universityImage || '/placeholder-university.jpg'}
-                        alt={`${selectedUniversity} campus`}
-                        className="w-full h-full object-cover rounded-lg shadow-md"
-                        onError={(e) => {
-                          const img = e.target as HTMLImageElement;
-                          img.src = '/placeholder-university.jpg';
-                        }}
-                      />
-                      {imageError && (
-                        <div className="absolute bottom-0 left-0 right-0 bg-red-500 bg-opacity-75 text-white p-2 text-sm rounded-b-lg">
-                          {imageError}
-                        </div>
-                      )}
+                <div className="mt-4 relative overflow-hidden rounded-lg">
+                  <img
+                    src={universityImage || 'https://images.unsplash.com/photo-1562774053-701939374585?w=1600&h=900&fit=crop&q=80'}
+                    alt={`${selectedUniversity}`}
+                    className={`w-full h-48 object-cover transition-opacity duration-300 ${
+                      isLoadingImage ? 'opacity-50' : 'opacity-100'
+                    }`}
+                  />
+                  {isLoadingImage && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-50">
+                      <div className="animate-spin rounded-full h-8 w-8 border-4 border-indigo-600 border-t-transparent"></div>
                     </div>
                   )}
                 </div>
@@ -553,7 +474,6 @@ function App() {
               </div>
             </div>
 
-            {/* Lifestyle Preferences */}
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2">
                 <Home className="w-6 h-6 text-indigo-600" />
@@ -593,7 +513,6 @@ function App() {
               </div>
             </div>
 
-            {/* Travel Plans */}
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2">
                 <Plane className="w-6 h-6 text-indigo-600" />
